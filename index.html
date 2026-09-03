@@ -1,0 +1,271 @@
+<script>
+    // 1. REEMPLAZA ESTE ENLACE con tu enlace publicado como CSV de Google Sheets
+    const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1uWZrPf7aimxXR1FCED3XlAtBv5NZAJRb5MPU2mOt2CY/edit?usp=sharing';
+
+    let products = [];
+    let cart = [];
+
+    // Productos de respaldo por si el celular bloquea o falla la conexión con Google Sheets
+    const fallbackProducts = [
+      {
+        id: 1,
+        name: "Outfit Urbano Femenino",
+        category: "Mujer",
+        price: 24990,
+        image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80",
+        description: "Estilo cómodo, moderno y versátil.",
+        stock: { S: 4, M: 2, L: 0, XL: 5 }
+      },
+      {
+        id: 2,
+        name: "Chaqueta Casual Masculina",
+        category: "Hombre",
+        price: 32500,
+        image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=600&q=80",
+        description: "Diseño exclusivo de alta durabilidad.",
+        stock: { S: 1, M: 6, L: 3, XL: 0 }
+      }
+    ];
+
+    // Función segura para dividir líneas de CSV respetando comillas y saltos de celular
+    function parseCSVLine(line) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    }
+
+    // Carga de productos desde Google Sheets
+    async function fetchProductsFromSheets() {
+      if (!SHEET_CSV_URL || SHEET_CSV_URL === 'https://docs.google.com/spreadsheets/d/1uWZrPf7aimxXR1FCED3XlAtBv5NZAJRb5MPU2mOt2CY/edit?usp=sharing') {
+        products = fallbackProducts;
+        renderProducts();
+        return;
+      }
+
+      try {
+        // Petición con timeout para evitar cargas infinitas en conexiones móviles lentas
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos máx.
+
+        const response = await fetch(SHEET_CSV_URL, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) throw new Error('Error al obtener la planilla');
+
+        const text = await response.text();
+        const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+
+        if (lines.length <= 1) {
+          throw new Error('Planilla vacía o sin datos');
+        }
+
+        // Convertir cada fila del CSV a producto
+        const parsedProducts = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseCSVLine(lines[i]);
+          if (cols.length >= 10) {
+            parsedProducts.push({
+              id: parseInt(cols[0]) || i,
+              name: cols[1] || 'Producto',
+              category: cols[2] || 'Unisex',
+              price: parseFloat(cols[3]) || 0,
+              image: cols[4] || 'https://via.placeholder.com/300',
+              description: cols[5] || '',
+              stock: {
+                S: parseInt(cols[6]) || 0,
+                M: parseInt(cols[7]) || 0,
+                L: parseInt(cols[8]) || 0,
+                XL: parseInt(cols[9]) || 0
+              }
+            });
+          }
+        }
+
+        if (parsedProducts.length > 0) {
+          products = parsedProducts;
+        } else {
+          products = fallbackProducts;
+        }
+
+        renderProducts();
+      } catch (error) {
+        console.warn('Cargando productos de respaldo debido a un problema de conexión:', error);
+        products = fallbackProducts;
+        renderProducts();
+      }
+    }
+
+    function renderProducts() {
+      const container = document.getElementById('products-container');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (products.length === 0) {
+        container.innerHTML = '<p style="text-align:center; grid-column: 1/-1;">No hay productos disponibles por el momento.</p>';
+        return;
+      }
+
+      products.forEach(p => {
+        const productHtml = `
+          <div class="product-card" id="product-${p.id}">
+            <div class="card-image">
+              <span class="category-tag">${p.category}</span>
+              <img src="${p.image}" alt="${p.name}" loading="lazy" onerror="this.src='https://via.placeholder.com/300?text=Imagen+No+Disponible'">
+              <div class="stock-overlay">
+                <h4>Stock Disponible</h4>
+                <ul>
+                  <li><strong>Talle S:</strong> ${p.stock.S > 0 ? p.stock.S + ' unid.' : '<span class="no-stock">Agotado</span>'}</li>
+                  <li><strong>Talle M:</strong> ${p.stock.M > 0 ? p.stock.M + ' unid.' : '<span class="no-stock">Agotado</span>'}</li>
+                  <li><strong>Talle L:</strong> ${p.stock.L > 0 ? p.stock.L + ' unid.' : '<span class="no-stock">Agotado</span>'}</li>
+                  <li><strong>Talle XL:</strong> ${p.stock.XL > 0 ? p.stock.XL + ' unid.' : '<span class="no-stock">Agotado</span>'}</li>
+                </ul>
+              </div>
+            </div>
+            <div class="card-info">
+              <h3>${p.name}</h3>
+              <p class="description">${p.description}</p>
+              <div class="size-selector">
+                <label for="size-${p.id}">Talle:</label>
+                <select id="size-${p.id}" onchange="updateStockBadge(${p.id})">
+                  <option value="S">S</option>
+                  <option value="M">M</option>
+                  <option value="L">L</option>
+                  <option value="XL">XL</option>
+                </select>
+                <span id="stock-badge-${p.id}" class="stock-badge">Stock: ${p.stock.S} disp.</span>
+              </div>
+              <div class="card-bottom">
+                <span class="price">$${p.price.toLocaleString('es-AR')}</span>
+                <button class="btn-buy" onclick="addToCart(${p.id})">Agregar</button>
+              </div>
+            </div>
+          </div>
+        `;
+        container.innerHTML += productHtml;
+      });
+
+      products.forEach(p => updateStockBadge(p.id));
+    }
+
+    function updateStockBadge(productId) {
+      const product = products.find(p => p.id === productId);
+      if(!product) return;
+      
+      const sizeSelect = document.getElementById(`size-${productId}`);
+      const selectedSize = sizeSelect ? sizeSelect.value : 'S';
+      const badge = document.getElementById(`stock-badge-${productId}`);
+      if (!badge) return;
+
+      const count = product.stock[selectedSize];
+
+      badge.innerText = count > 0 ? `Stock: ${count} disp.` : "Agotado";
+      badge.style.background = count > 0 ? "#fce7f3" : "#fee2e2";
+      badge.style.color = count > 0 ? "#be185d" : "#991b1b";
+    }
+
+    function addToCart(productId) {
+      const product = products.find(p => p.id === productId);
+      const size = document.getElementById(`size-${productId}`).value;
+      
+      if(product.stock[size] <= 0) {
+        alert("Lo sentimos, este talle se encuentra agotado.");
+        return;
+      }
+
+      const existing = cart.find(item => item.id === productId && item.size === size);
+
+      if (existing) {
+        if(existing.quantity + 1 > product.stock[size]) {
+          alert("No hay más stock disponible para este talle.");
+          return;
+        }
+        existing.quantity += 1;
+      } else {
+        cart.push({ id: product.id, name: product.name, price: product.price, size, quantity: 1 });
+      }
+
+      renderCart();
+      toggleCart(true);
+    }
+
+    function removeFromCart(index) {
+      cart.splice(index, 1);
+      renderCart();
+    }
+
+    function renderCart() {
+      const cartItemsContainer = document.getElementById('cart-items');
+      const cartCount = document.getElementById('cart-count');
+      const cartTotal = document.getElementById('cart-total');
+
+      if (cart.length === 0) {
+        cartItemsContainer.innerHTML = '<p class="empty-msg">Tu carrito está vacío</p>';
+        cartCount.innerText = '0';
+        cartTotal.innerText = '0';
+        return;
+      }
+
+      let itemsHtml = '';
+      let total = 0;
+      let totalCount = 0;
+
+      cart.forEach((item, index) => {
+        const subtotal = item.price * item.quantity;
+        total += subtotal;
+        totalCount += item.quantity;
+
+        itemsHtml += `
+          <div class="cart-item">
+            <div>
+              <h4>${item.name}</h4>
+              <p>Talle: ${item.size} | Cant: ${item.quantity}</p>
+              <p class="item-price">$${subtotal.toLocaleString('es-AR')}</p>
+            </div>
+            <button class="remove-btn" onclick="removeFromCart(${index})">🗑</button>
+          </div>
+        `;
+      });
+
+      cartItemsContainer.innerHTML = itemsHtml;
+      cartCount.innerText = totalCount;
+      cartTotal.innerText = total.toLocaleString('es-AR');
+    }
+
+    function toggleCart(forceOpen = false) {
+      const sidebar = document.getElementById('cart-sidebar');
+      if (forceOpen) sidebar.classList.add('open');
+      else sidebar.classList.toggle('open');
+    }
+
+    function sendToWhatsApp() {
+      if (cart.length === 0) return alert("Tu carrito está vacío.");
+
+      let message = "Hola IP_Showroom! Quiero realizar el siguiente pedido:\n\n";
+      let total = 0;
+
+      cart.forEach(item => {
+        const subtotal = item.price * item.quantity;
+        total += subtotal;
+        message += `• ${item.name} (Talle: ${item.size}) x${item.quantity} - $${subtotal.toLocaleString('es-AR')}\n`;
+      });
+
+      message += `\n*Total a pagar: $${total.toLocaleString('es-AR')}*`;
+      window.open(`https://wa.me/5412345678?text=${encodeURIComponent(message)}`, '_blank');
+    }
+
+    // Iniciar carga
+    fetchProductsFromSheets();
+  </script>
