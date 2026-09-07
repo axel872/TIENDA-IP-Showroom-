@@ -134,10 +134,10 @@
 
   <script>
     // 1. REEMPLAZA ESTE ENLACE con tu enlace publicado como CSV de Google Sheets
-    const SHEET_CSV_URL = 'TU_LINK_DE_GOOGLE_SHEETS_AQUI';
+    const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR2kgZM9-6LsAAgBRAxFT8t05ol15X6JJF0N-jJybmFmE2Hl5P7XsOiSYVgfzTa58_yltum5r5j2rri/pub?output=csv';
     
     // Contraseña para el panel
-    const ADMIN_PASSWORD = "admin123";
+    const ADMIN_PASSWORD = "admin.@1812";
 
     let products = [];
     let cart = [];
@@ -183,7 +183,7 @@
     }
 
     async function fetchProductsFromSheets() {
-      if (!SHEET_CSV_URL || SHEET_CSV_URL === 'TU_LINK_DE_GOOGLE_SHEETS_AQUI') {
+      if (!SHEET_CSV_URL || SHEET_CSV_URL === 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR2kgZM9-6LsAAgBRAxFT8t05ol15X6JJF0N-jJybmFmE2Hl5P7XsOiSYVgfzTa58_yltum5r5j2rri/pub?output=csv') {
         products = fallbackProducts;
         renderProducts();
         return;
